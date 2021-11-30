@@ -6,7 +6,7 @@ project(MDParse)
 include(FetchContent)
 FetchContent_Declare(ftxui
   GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI
-  GIT_TAG cecd54df42dd66fdf8386ed461e16b725bffc827
+  GIT_TAG 3d0c43b0de4a126dbeafbb958b09dd719fb0456c
 )
 
 FetchContent_MakeAvailable(ftxui)
