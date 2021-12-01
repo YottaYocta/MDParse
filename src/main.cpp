@@ -33,12 +33,13 @@ ftxui::Element generate_rule_element(const rule& r)
   }) | ftxui::border;
 }
 
-void parse_to_csv(const std::vector<std::string>& lines, const std::vector<rule>& rules, std::ofstream& fout, int depth)
+void parse_to_csv(const std::string& parent, const std::vector<std::string>& lines, const std::vector<rule>& rules, std::ofstream& fout, int depth)
 {
   if (depth == 0 && lines.size() > 0) 
     return;
-  std::vector<std::string> not_term {};
+
   rule cur_rule {rules[std::min(rules.size() - 1, std::max(std::size_t {0}, rules.size() - depth))]};
+
   for (int i {0}; i < lines.size(); i++)
   {
     std::stringstream ss {lines[i]};    
@@ -46,32 +47,50 @@ void parse_to_csv(const std::vector<std::string>& lines, const std::vector<rule>
     ss >> temp;
     if (temp == cur_rule.term)
     {
+      std::vector<std::string> current_block {};
+
+      std::string term {};
+
       if (ss >> temp)
-        fout << '\n' << temp;
+      {
+        term += (parent.size() == 0 ? parent : parent + " - ") + temp;
+        fout << '\n' << (parent.size() == 0 ? parent : parent + " - ") << temp;
+      }
       while (ss >> temp)
       {
+        term += " " + temp; 
         fout << ' ' << temp; 
       }
-    }
-    else if (temp == cur_rule.definition)
-    {
-      if (ss >> temp)
-        fout << ',' << ' ' << temp;
-      while (ss >> temp)
+
+      int count {0};
+
+      for (int j {i + 1}; j < lines.size(); j++)
       {
-        fout << ' ' << temp; 
+        std::stringstream defstream {lines[j]};
+        defstream >> temp;
+
+        if (temp == cur_rule.term)
+          break;
+
+        count++;
+
+        if (temp == cur_rule.definition)
+        {
+          
+          if (defstream >> temp)
+            fout << ',' << ' ' << temp;
+          while (defstream >> temp)
+            fout << ' ' << temp; 
+
+        }
+        current_block.push_back(lines[j]);
       }
-      not_term.push_back(lines[i]);
-    }
-    else
-    {
-      not_term.push_back(lines[i]);
+
+      parse_to_csv(term, current_block, rules, fout, depth - 1);
+
+      i += count;
     }
   }
-    
-  parse_to_csv(not_term, rules, fout, depth - 1);
-
-  return;
 }
 
 std::ifstream fin {};
@@ -164,7 +183,7 @@ int main(int argc, char* argv[])
   })};
 
   ftxui::Component parse_button {ftxui::Button("Parse Values", [&](){
-    parse_to_csv(lines, rules, fout, rules.size());
+    parse_to_csv("", lines, rules, fout, rules.size());
     scr.ExitLoopClosure()(); 
   })};
 
