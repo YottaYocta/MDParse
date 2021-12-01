@@ -33,7 +33,7 @@ ftxui::Element generate_rule_element(const rule& r)
   }) | ftxui::border;
 }
 
-void parse_to_csv(const std::string& parent, const std::vector<std::string>& lines, const std::vector<rule>& rules, std::ofstream& fout, int depth)
+void parse_to_tsv(const std::string& parent, const std::vector<std::string>& lines, const std::vector<rule>& rules, std::ofstream& fout, int depth)
 {
   if (depth == 0 && lines.size() > 0) 
     return;
@@ -78,7 +78,7 @@ void parse_to_csv(const std::string& parent, const std::vector<std::string>& lin
         {
           
           if (defstream >> temp)
-            fout << ',' << ' ' << temp;
+            fout << '\t' << ' ' << temp;
           while (defstream >> temp)
             fout << ' ' << temp; 
 
@@ -86,7 +86,7 @@ void parse_to_csv(const std::string& parent, const std::vector<std::string>& lin
         current_block.push_back(lines[j]);
       }
 
-      parse_to_csv(term, current_block, rules, fout, depth - 1);
+      parse_to_tsv(term, current_block, rules, fout, depth - 1);
 
       i += count;
     }
@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
     return -1;
   }
 
-  std::string csv_file {md_file.substr(0, file_ext_ind) + ".csv"};
+  std::string tsv_file {md_file.substr(0, file_ext_ind) + ".tsv"};
 
   fin.open(md_file);
 
@@ -125,7 +125,7 @@ int main(int argc, char* argv[])
     return -1;
   }
 
-  fout.open(csv_file);
+  fout.open(tsv_file);
 
   // data
 
@@ -183,7 +183,7 @@ int main(int argc, char* argv[])
   })};
 
   ftxui::Component parse_button {ftxui::Button("Parse Values", [&](){
-    parse_to_csv("", lines, rules, fout, rules.size());
+    parse_to_tsv("", lines, rules, fout, rules.size());
     scr.ExitLoopClosure()(); 
   })};
 

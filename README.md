@@ -1,5 +1,5 @@
 # MDParse
-A Markdown to CSV parser for exporting Markdown notes to various flashcard/study apps
+A Markdown to TSV parser for exporting Markdown notes to various flashcard/study apps
 
 ## Target Features
   * analysis of depth of notes (specifically outlines) by number of tabs
