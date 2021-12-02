@@ -18,11 +18,31 @@ const std::vector<std::string> delimiters {
   "-"
 };
 
+const std::vector<std::string> file_delimiters {
+  "tab",
+  "comma",
+  "newline"
+};
+
 struct rule
 {
   rule() : term {}, definition {} {}
   rule(const std::string& t, const std::string& d) : term {t}, definition {d} {}
   std::string term, definition;
+};
+
+struct parse_options
+{
+  parse_options(const std::vector<rule>& r) : rules {r}, 
+    definition_delimiter {"\n"}, 
+    term_delimiter {"\t"}, 
+    depth {rules.size()},
+    parent {""} {}
+  std::vector<rule> rules;
+  std::string definition_delimiter;
+  std::string term_delimiter;
+  std::string parent;
+  std::size_t depth;
 };
 
 ftxui::Element generate_rule_element(const rule& r)
@@ -33,12 +53,12 @@ ftxui::Element generate_rule_element(const rule& r)
   }) | ftxui::border;
 }
 
-void parse_to_tsv(const std::string& parent, const std::vector<std::string>& lines, const std::vector<rule>& rules, std::ofstream& fout, int depth)
+void parse_markdown(const std::vector<std::string>& lines, std::ofstream& fout, parse_options& options)
 {
-  if (depth == 0 && lines.size() > 0) 
+  if (options.depth == 0 || lines.size() <= 0) 
     return;
 
-  rule cur_rule {rules[std::min(rules.size() - 1, std::max(std::size_t {0}, rules.size() - depth))]};
+  rule cur_rule {options.rules[std::min(options.rules.size() - 1, std::max(std::size_t {0}, options.rules.size() - options.depth))]};
 
   for (int i {0}; i < lines.size(); i++)
   {
@@ -47,20 +67,14 @@ void parse_to_tsv(const std::string& parent, const std::vector<std::string>& lin
     ss >> temp;
     if (temp == cur_rule.term)
     {
+      std::string term {};
+      std::string definition {};
       std::vector<std::string> current_block {};
 
-      std::string term {};
-
       if (ss >> temp)
-      {
-        term += (parent.size() == 0 ? parent : parent + " - ") + temp;
-        fout << '\n' << (parent.size() == 0 ? parent : parent + " - ") << temp;
-      }
+        term += (options.parent.size() == 0 ? options.parent : options.parent + "::") + temp;
       while (ss >> temp)
-      {
         term += " " + temp; 
-        fout << ' ' << temp; 
-      }
 
       int count {0};
 
@@ -76,17 +90,20 @@ void parse_to_tsv(const std::string& parent, const std::vector<std::string>& lin
 
         if (temp == cur_rule.definition)
         {
-          
           if (defstream >> temp)
-            fout << '\t' << ' ' << temp;
+            definition += options.definition_delimiter + temp;
           while (defstream >> temp)
-            fout << ' ' << temp; 
-
+            definition += std::string {" "} + temp; 
         }
         current_block.push_back(lines[j]);
       }
 
-      parse_to_tsv(term, current_block, rules, fout, depth - 1);
+      if (definition.size() > 0)
+        fout << term << definition << options.term_delimiter;
+
+      options.depth--;
+      parse_markdown(lines, fout, options);
+      options.depth++;
 
       i += count;
     }
@@ -115,7 +132,7 @@ int main(int argc, char* argv[])
     return -1;
   }
 
-  std::string tsv_file {md_file.substr(0, file_ext_ind) + ".tsv"};
+  std::string txt_file {md_file.substr(0, file_ext_ind) + ".txt"};
 
   fin.open(md_file);
 
@@ -125,7 +142,7 @@ int main(int argc, char* argv[])
     return -1;
   }
 
-  fout.open(tsv_file);
+  fout.open(txt_file);
 
   // data
 
@@ -147,14 +164,24 @@ int main(int argc, char* argv[])
   int definition_delim_ind {};
   ftxui::Component definition_delim_menu {ftxui::Menu(&delimiters, &definition_delim_ind)};
 
+  int file_delim_ind {};
+  ftxui::Component file_delim_menu {ftxui::Menu(&file_delimiters, &file_delim_ind)};
+
   ftxui::Component add_rule {ftxui::Button("Add new rule >>", [&](){
     rules.push_back(rule {delimiters[term_delim_ind], delimiters[definition_delim_ind]});
+  })};
+
+  ftxui::Component remove_rule {ftxui::Button("Remove Rule", [&](){
+    if (rules.size() > 0)
+      rules.pop_back();
   })};
 
   ftxui::Component rule_gen_container {ftxui::Container::Vertical({
     term_delim_menu,
     definition_delim_menu,
-    add_rule
+    file_delim_menu,
+    add_rule,
+    remove_rule
   })};
 
   ftxui::Component rule_gen_renderer {ftxui::Renderer(rule_gen_container, [&](){
@@ -169,7 +196,12 @@ int main(int argc, char* argv[])
           definition_delim_menu->Render()
         ) | ftxui::flex
       }),
-      add_rule->Render() | ftxui::color(ftxui::Color::Green)
+      ftxui::window(
+        ftxui::text("Choose output delimiter:"),
+        file_delim_menu->Render()
+      ),
+      add_rule->Render() | ftxui::color(ftxui::Color::Green),
+      (rules.size() > 0 ? remove_rule->Render() | ftxui::color(ftxui::Color::Red) : ftxui::emptyElement())
     }) | ftxui::border;
   })};
 
@@ -183,7 +215,28 @@ int main(int argc, char* argv[])
   })};
 
   ftxui::Component parse_button {ftxui::Button("Parse Values", [&](){
-    parse_to_tsv("", lines, rules, fout, rules.size());
+    if (rules.size() == 0)
+      return;
+
+    parse_options options {rules};
+
+    if (file_delimiters[file_delim_ind] == "newline")
+    {
+      options.term_delimiter = "\n\n"; 
+      options.definition_delimiter = "\n";
+    }
+    else if (file_delimiters[file_delim_ind] == "tab")
+    {
+      options.term_delimiter = "\n"; 
+      options.definition_delimiter = "\t";
+    }
+    else if (file_delimiters[file_delim_ind] == "comma")
+    {
+      options.term_delimiter = "\n"; 
+      options.definition_delimiter = ",";
+    }
+
+    parse_markdown(lines, fout, options);
     scr.ExitLoopClosure()(); 
   })};
 
@@ -197,13 +250,13 @@ int main(int argc, char* argv[])
     return ftxui::vbox({
       rule_gen_renderer->Render(),
       rule_renderer->Render(),
-      (rules.size() > 0 ? parse_button->Render() : ftxui::emptyElement())
+      (rules.size() > 0 ? parse_button->Render() | ftxui::color(ftxui::Color::White) : ftxui::emptyElement())
     });
   })};
 
   scr.Loop(main_renderer);
 
-  std::clog << '\n' << "\nvalues succesfully parsed!" << '\n';
+  std::clog << '\n' << "values succesfully parsed!" << '\n' << '\n';
 
   return 0;
 }
