@@ -14,8 +14,11 @@ const std::vector<std::string> delimiters {
   "##",
   "###",
   "####",
+  "#####",
+  "######",
   "*",
-  "-"
+  "-",
+  "+",
 };
 
 const std::vector<std::string> file_delimiters {
@@ -104,7 +107,7 @@ void parse_markdown(const std::vector<std::string>& lines, std::ofstream& fout, 
       options.depth--;
       std::string temp_parent {options.parent};
       options.parent = options.parent + term;
-      parse_markdown(lines, fout, options);
+      parse_markdown(current_block, fout, options);
       options.depth++;
       options.parent = temp_parent;
 
@@ -192,16 +195,16 @@ int main(int argc, char* argv[])
       ftxui::hbox({
         ftxui::window(
           ftxui::text("Choose card delimiter:"),
-          term_delim_menu->Render()
+          term_delim_menu->Render() | ftxui::frame | ftxui::size(ftxui::HEIGHT, ftxui::LESS_THAN, 5)
         ) | ftxui::flex,
         ftxui::window(
           ftxui::text("Choose definition delimiter:"),
-          definition_delim_menu->Render()
+          definition_delim_menu->Render() | ftxui::frame | ftxui::size(ftxui::HEIGHT, ftxui::LESS_THAN, 5)
         ) | ftxui::flex
       }),
       ftxui::window(
         ftxui::text("Choose output delimiter:"),
-        file_delim_menu->Render()
+        file_delim_menu->Render() | ftxui::frame | ftxui::size(ftxui::HEIGHT, ftxui::LESS_THAN, 5)
       ),
       add_rule->Render() | ftxui::color(ftxui::Color::Green),
       (rules.size() > 0 ? remove_rule->Render() | ftxui::color(ftxui::Color::Red) : ftxui::emptyElement())
@@ -209,12 +212,16 @@ int main(int argc, char* argv[])
   })};
 
   ftxui::Component rule_renderer {ftxui::Renderer([&](){
+    if (rules.size() == 0)
+      return ftxui::emptyElement();
+
     ftxui::Elements rule_elements {};
 
     for (int i {0}; i < rules.size(); i++)
       rule_elements.push_back(generate_rule_element(rules[i]));
 
-    return ftxui::vbox(rule_elements);
+    rule_elements[rule_elements.size() - 1] | ftxui::focus;
+    return ftxui::vbox(rule_elements) | ftxui::frame | ftxui::size(ftxui::HEIGHT, ftxui::LESS_THAN, 5) | ftxui::border;
   })};
 
   ftxui::Component parse_button {ftxui::Button("Parse Values", [&](){
@@ -252,7 +259,7 @@ int main(int argc, char* argv[])
   ftxui::Component main_renderer {ftxui::Renderer(main, [&](){
     return ftxui::vbox({
       rule_gen_renderer->Render(),
-      rule_renderer->Render(),
+      rule_renderer->Render(), 
       (rules.size() > 0 ? parse_button->Render() | ftxui::color(ftxui::Color::White) : ftxui::emptyElement())
     });
   })};
