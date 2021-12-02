@@ -75,7 +75,7 @@ void parse_markdown(const std::vector<std::string>& lines, std::ofstream& fout, 
       std::vector<std::string> current_block {};
 
       if (ss >> temp)
-        term += (options.parent.size() == 0 ? options.parent : "(" + options.parent + ") ") + temp;
+        term += (options.parent.size() == 0 ? options.parent : options.parent + " :: ") + temp;
       while (ss >> temp)
         term += " " + temp; 
 
@@ -106,7 +106,7 @@ void parse_markdown(const std::vector<std::string>& lines, std::ofstream& fout, 
 
       options.depth--;
       std::string temp_parent {options.parent};
-      options.parent = options.parent + term;
+      options.parent = term;
       parse_markdown(current_block, fout, options);
       options.depth++;
       options.parent = temp_parent;
@@ -158,7 +158,9 @@ int main(int argc, char* argv[])
   while (getline(fin, newline))
     lines.push_back(newline);
 
+  int selected_rule {};
   std::vector<rule> rules {};
+  std::vector<std::string> rule_strings {};
 
   // application TUI
   
@@ -174,12 +176,19 @@ int main(int argc, char* argv[])
   ftxui::Component file_delim_menu {ftxui::Menu(&file_delimiters, &file_delim_ind)};
 
   ftxui::Component add_rule {ftxui::Button("Add new rule >>", [&](){
-    rules.push_back(rule {delimiters[term_delim_ind], delimiters[definition_delim_ind]});
+    rule r {delimiters[term_delim_ind], delimiters[definition_delim_ind]};
+    std::string rule_string {r.term + "::" + r.definition};
+    rules.push_back(r);
+    rule_strings.push_back(rule_string);
   })};
 
   ftxui::Component remove_rule {ftxui::Button("Remove Rule", [&](){
     if (rules.size() > 0)
-      rules.pop_back();
+    {
+      rules.erase(rules.begin() + selected_rule);
+      rule_strings.erase(rule_strings.begin() + selected_rule);
+      selected_rule = std::max(selected_rule - 1, 0);
+    }
   })};
 
   ftxui::Component rule_gen_container {ftxui::Container::Vertical({
@@ -208,21 +217,10 @@ int main(int argc, char* argv[])
       ),
       add_rule->Render() | ftxui::color(ftxui::Color::Green),
       (rules.size() > 0 ? remove_rule->Render() | ftxui::color(ftxui::Color::Red) : ftxui::emptyElement())
-    }) | ftxui::border;
+    });
   })};
 
-  ftxui::Component rule_renderer {ftxui::Renderer([&](){
-    if (rules.size() == 0)
-      return ftxui::emptyElement();
-
-    ftxui::Elements rule_elements {};
-
-    for (int i {0}; i < rules.size(); i++)
-      rule_elements.push_back(generate_rule_element(rules[i]));
-
-    rule_elements[rule_elements.size() - 1] | ftxui::focus;
-    return ftxui::vbox(rule_elements) | ftxui::frame | ftxui::size(ftxui::HEIGHT, ftxui::LESS_THAN, 5) | ftxui::border;
-  })};
+  ftxui::Component rule_list {ftxui::Menu(&rule_strings, &selected_rule)};
 
   ftxui::Component parse_button {ftxui::Button("Parse Values", [&](){
     if (rules.size() == 0)
@@ -248,25 +246,32 @@ int main(int argc, char* argv[])
 
     parse_markdown(lines, fout, options);
     scr.ExitLoopClosure()(); 
+
+    std::clog << '\n' << "values succesfully parsed!" << '\n' << '\n';
   })};
 
   ftxui::Component main {ftxui::Container::Vertical({
     rule_gen_renderer,
-    rule_renderer,
+    rule_list,
     parse_button
   })};
 
   ftxui::Component main_renderer {ftxui::Renderer(main, [&](){
     return ftxui::vbox({
       rule_gen_renderer->Render(),
-      rule_renderer->Render(), 
-      (rules.size() > 0 ? parse_button->Render() | ftxui::color(ftxui::Color::White) : ftxui::emptyElement())
+      
+      (rules.size() > 0 ? 
+        ftxui::vbox({
+          ftxui::window(ftxui::text("Rules:"), rule_list->Render() | ftxui::frame | ftxui::size(ftxui::HEIGHT, ftxui::LESS_THAN, 7)), 
+          parse_button->Render() | ftxui::color(ftxui::Color::White) 
+        })
+        : ftxui::emptyElement()
+      )
     });
   })};
 
   scr.Loop(main_renderer);
 
-  std::clog << '\n' << "values succesfully parsed!" << '\n' << '\n';
 
   return 0;
 }
