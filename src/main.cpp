@@ -72,7 +72,7 @@ void parse_markdown(const std::vector<std::string>& lines, std::ofstream& fout, 
       std::vector<std::string> current_block {};
 
       if (ss >> temp)
-        term += (options.parent.size() == 0 ? options.parent : options.parent + "::") + temp;
+        term += (options.parent.size() == 0 ? options.parent : "(" + options.parent + ") ") + temp;
       while (ss >> temp)
         term += " " + temp; 
 
@@ -102,8 +102,11 @@ void parse_markdown(const std::vector<std::string>& lines, std::ofstream& fout, 
         fout << term << definition << options.term_delimiter;
 
       options.depth--;
+      std::string temp_parent {options.parent};
+      options.parent = options.parent + term;
       parse_markdown(lines, fout, options);
       options.depth++;
+      options.parent = temp_parent;
 
       i += count;
     }
