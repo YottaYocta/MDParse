@@ -164,6 +164,8 @@ int main(int argc, char* argv[])
 
   // application TUI
   
+  bool parsed {false};
+
   ftxui::ScreenInteractive scr {ftxui::ScreenInteractive::Fullscreen()};
 
   int term_delim_ind {};
@@ -245,9 +247,8 @@ int main(int argc, char* argv[])
     }
 
     parse_markdown(lines, fout, options);
+    parsed = true;
     scr.ExitLoopClosure()(); 
-
-    std::clog << '\n' << "values succesfully parsed!" << '\n' << '\n';
   })};
 
   ftxui::Component main {ftxui::Container::Vertical({
@@ -272,6 +273,8 @@ int main(int argc, char* argv[])
 
   scr.Loop(main_renderer);
 
+  if (parsed)
+    std::clog << "File successfully parsed!" << '\n' << '\n';
 
   return 0;
 }
