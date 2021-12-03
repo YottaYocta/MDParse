@@ -9,6 +9,28 @@
 #include <ftxui/component/event.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 
+struct rule
+{
+  rule() : term {}, definition {} {}
+  rule(const std::string& t, const std::string& d) : term {t}, definition {d} {}
+  std::string term, definition;
+};
+
+struct parse_options
+{
+  parse_options(const std::vector<rule>& r, const std::string& term, const std::string& def) :
+    rules {r}, 
+    term_delimiter {term}, 
+    definition_delimiter {def}, 
+    depth {rules.size()},
+    parent {""} {}
+  std::vector<rule> rules;
+  std::string definition_delimiter;
+  std::string term_delimiter;
+  std::string parent;
+  std::size_t depth;
+};
+
 const std::vector<std::string> delimiters {
   "#",
   "##",
@@ -27,25 +49,10 @@ const std::vector<std::string> file_delimiters {
   "newline"
 };
 
-struct rule
-{
-  rule() : term {}, definition {} {}
-  rule(const std::string& t, const std::string& d) : term {t}, definition {d} {}
-  std::string term, definition;
-};
-
-struct parse_options
-{
-  parse_options(const std::vector<rule>& r) : rules {r}, 
-    definition_delimiter {"\n"}, 
-    term_delimiter {"\t"}, 
-    depth {rules.size()},
-    parent {""} {}
-  std::vector<rule> rules;
-  std::string definition_delimiter;
-  std::string term_delimiter;
-  std::string parent;
-  std::size_t depth;
+const std::vector<rule> file_delimiter_values {
+  {"\n", "\t"},
+  {"\n", ","},
+  {"\n\n", "\n"}
 };
 
 ftxui::Element generate_rule_element(const rule& r)
@@ -228,23 +235,7 @@ int main(int argc, char* argv[])
     if (rules.size() == 0)
       return;
 
-    parse_options options {rules};
-
-    if (file_delimiters[file_delim_ind] == "newline")
-    {
-      options.term_delimiter = "\n\n"; 
-      options.definition_delimiter = "\n";
-    }
-    else if (file_delimiters[file_delim_ind] == "tab")
-    {
-      options.term_delimiter = "\n"; 
-      options.definition_delimiter = "\t";
-    }
-    else if (file_delimiters[file_delim_ind] == "comma")
-    {
-      options.term_delimiter = "\n"; 
-      options.definition_delimiter = ",";
-    }
+    parse_options options {rules, file_delimiter_values[file_delim_ind].term, file_delimiter_values[file_delim_ind].definition};
 
     parse_markdown(lines, fout, options);
     parsed = true;
