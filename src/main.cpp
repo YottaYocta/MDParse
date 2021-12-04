@@ -9,6 +9,22 @@
 #include <ftxui/component/event.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 
+class debug
+{
+  public:
+    debug() : dlog {}, db {false} {}
+    debug(std::string fn, bool d) : dlog {fn}, db {d} {}
+    template <class T>
+    void log(const T& v)
+    {
+      if (db)
+        dlog << v;
+    }
+  private:
+    std::ofstream dlog;
+    bool db;
+};
+
 struct rule
 {
   rule() : term {}, definition {} {}
@@ -22,13 +38,19 @@ struct parse_options
     rules {r}, 
     term_delimiter {term}, 
     definition_delimiter {def}, 
-    depth {rules.size()},
-    parent {""} {}
+    parent {""},
+    dlog {} {}
+  parse_options(const std::vector<rule>& r, const std::string& term, const std::string& def, bool d) :
+    rules {r}, 
+    term_delimiter {term}, 
+    definition_delimiter {def}, 
+    parent {""},
+    dlog {"parselog.txt", d} {}
   std::vector<rule> rules;
   std::string definition_delimiter;
   std::string term_delimiter;
   std::string parent;
-  std::size_t depth;
+  debug dlog;
 };
 
 const std::vector<std::string> delimiters {
@@ -63,15 +85,17 @@ ftxui::Element generate_rule_element(const rule& r)
   }) | ftxui::border;
 }
 
-void parse_markdown(const std::vector<std::string>& lines, std::ofstream& fout, parse_options& options)
+void parse_markdown(const std::vector<std::string>& lines, std::vector<std::string>& buffer, parse_options& options)
 {
-  if (options.depth == 0 || lines.size() <= 0) 
+  if (lines.size() <= 0 || options.rules.size() == 0) 
     return;
 
-  rule cur_rule {options.rules[std::min(options.rules.size() - 1, std::max(std::size_t {0}, options.rules.size() - options.depth))]};
+  rule cur_rule {options.rules.back()};
+  options.rules.pop_back();
 
   for (int i {0}; i < lines.size(); i++)
   {
+    options.dlog.log("current line: " + lines[i] + '\n');
     std::stringstream ss {lines[i]};    
     std::string temp {};
     ss >> temp;
@@ -85,6 +109,8 @@ void parse_markdown(const std::vector<std::string>& lines, std::ofstream& fout, 
         term += (options.parent.size() == 0 ? options.parent : options.parent + " :: ") + temp;
       while (ss >> temp)
         term += " " + temp; 
+
+      options.dlog.log("term: " + term + '\n');
 
       int count {0};
 
@@ -108,30 +134,45 @@ void parse_markdown(const std::vector<std::string>& lines, std::ofstream& fout, 
         current_block.push_back(lines[j]);
       }
 
-      if (definition.size() > 0)
-        fout << term << definition << options.term_delimiter;
+      options.dlog.log("definition: " + definition + '\n');
 
-      options.depth--;
+      if (definition.size() > 0)
+      {
+        buffer.push_back(term + definition + options.term_delimiter);
+        options.dlog.log("value added to buffer\n");
+      }
+
       std::string temp_parent {options.parent};
       options.parent = term;
-      parse_markdown(current_block, fout, options);
-      options.depth++;
+      parse_markdown(current_block, buffer, options);
       options.parent = temp_parent;
+      options.rules.push_back(cur_rule);
 
       i += count;
     }
   }
 }
 
-std::ifstream fin {};
-std::ofstream fout {};
 
 int main(int argc, char* argv[])
 {
+  std::ifstream fin {};
+  std::ofstream fout {};
+
+  bool logging {false};
+
   if (argc <= 1)
   {
-    std::cerr << "usage: MDParse [some-markdown-file].md" << '\n';
+    std::cerr << "usage: MDParse [some-markdown-file].md [tags]" << '\n' << '\t' << "-d, --debug: log errors and processes" << '\n';
     return -1;
+  }
+
+  for (int i {0}; i < argc; i++)
+  {
+    std::string arg {argv[i]};
+
+    if (arg == "--debug" || arg == "-d")
+      logging = true;
   }
   
   // file I/O
@@ -146,7 +187,7 @@ int main(int argc, char* argv[])
   }
 
   std::string txt_file {md_file.substr(0, file_ext_ind) + ".txt"};
-
+  
   fin.open(md_file);
 
   if (!fin.is_open())
@@ -235,10 +276,16 @@ int main(int argc, char* argv[])
     if (rules.size() == 0)
       return;
 
-    parse_options options {rules, file_delimiter_values[file_delim_ind].term, file_delimiter_values[file_delim_ind].definition};
+    std::vector<rule> rule_copy {rules.begin(), rules.end()};
+    std::reverse(rule_copy.begin(), rule_copy.end());
+    parse_options options {rule_copy, file_delimiter_values[file_delim_ind].term, file_delimiter_values[file_delim_ind].definition, logging};
+    std::vector<std::string> buffer {};
 
-    parse_markdown(lines, fout, options);
+    parse_markdown(lines, buffer, options);
+    for (const std::string& line : buffer)
+      fout << line;
     parsed = true;
+    options.dlog.log("values written from buffer");
     scr.ExitLoopClosure()(); 
   })};
 
