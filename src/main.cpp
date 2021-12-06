@@ -39,17 +39,20 @@ struct parse_options
     term_delimiter {term}, 
     definition_delimiter {def}, 
     parent {""},
+    depth {static_cast<int>(rules.size())},
     dlog {} {}
   parse_options(const std::vector<rule>& r, const std::string& term, const std::string& def, bool d) :
     rules {r}, 
     term_delimiter {term}, 
     definition_delimiter {def}, 
     parent {""},
+    depth {static_cast<int>(rules.size())},
     dlog {"parselog.txt", d} {}
   std::vector<rule> rules;
   std::string definition_delimiter;
   std::string term_delimiter;
   std::string parent;
+  int depth;
   debug dlog;
 };
 
@@ -87,15 +90,23 @@ ftxui::Element generate_rule_element(const rule& r)
 
 void parse_markdown(const std::vector<std::string>& lines, std::vector<std::string>& buffer, parse_options& options)
 {
-  if (lines.size() <= 0 || options.rules.size() == 0) 
+  if (lines.size() <= 0 || options.depth <= 0)
     return;
 
-  rule cur_rule {options.rules.back()};
-  options.rules.pop_back();
+  rule cur_rule {options.rules[options.rules.size() - options.depth]};
+
+  options.dlog.log("\n{\n\nRULES:\n");
+  for (int i {0}; i < options.rules.size(); i++)
+    options.dlog.log(options.rules[i].term + ' ' + options.rules[i].definition + '\n');
+  options.dlog.log('\n');
+
+  options.dlog.log("CURRENT RULE:\n");
+  options.dlog.log(cur_rule.term + ' ' + cur_rule.definition + '\n');
+  options.dlog.log("\nLINES:\n\n");
 
   for (int i {0}; i < lines.size(); i++)
   {
-    options.dlog.log("current line: " + lines[i] + '\n');
+    options.dlog.log(lines[i] + '\n');    
     std::stringstream ss {lines[i]};    
     std::string temp {};
     ss >> temp;
@@ -110,10 +121,6 @@ void parse_markdown(const std::vector<std::string>& lines, std::vector<std::stri
       while (ss >> temp)
         term += " " + temp; 
 
-      options.dlog.log("term: " + term + '\n');
-
-      int count {0};
-
       for (int j {i + 1}; j < lines.size(); j++)
       {
         std::stringstream defstream {lines[j]};
@@ -121,8 +128,6 @@ void parse_markdown(const std::vector<std::string>& lines, std::vector<std::stri
 
         if (temp == cur_rule.term)
           break;
-
-        count++;
 
         if (temp == cur_rule.definition)
         {
@@ -134,23 +139,27 @@ void parse_markdown(const std::vector<std::string>& lines, std::vector<std::stri
         current_block.push_back(lines[j]);
       }
 
-      options.dlog.log("definition: " + definition + '\n');
-
       if (definition.size() > 0)
       {
         buffer.push_back(term + definition + options.term_delimiter);
-        options.dlog.log("value added to buffer\n");
       }
+      options.dlog.log("\nterm: " + term + "\ndefinition: " + definition + "\n\n");
+
+      options.dlog.log("\ncurrent block: \n");
+      for (int i {0}; i < current_block.size(); i++)
+        options.dlog.log(current_block[i] + '\n');
 
       std::string temp_parent {options.parent};
       options.parent = term;
+      options.depth--;
       parse_markdown(current_block, buffer, options);
+      options.depth++;
       options.parent = temp_parent;
-      options.rules.push_back(cur_rule);
 
-      i += count;
+      i += current_block.size();
     }
   }
+  options.dlog.log("\n}\n\n");
 }
 
 
@@ -277,8 +286,13 @@ int main(int argc, char* argv[])
       return;
 
     std::vector<rule> rule_copy {rules.begin(), rules.end()};
-    std::reverse(rule_copy.begin(), rule_copy.end());
     parse_options options {rule_copy, file_delimiter_values[file_delim_ind].term, file_delimiter_values[file_delim_ind].definition, logging};
+
+    options.dlog.log("rules:\n");
+    for (int i {0}; i < options.rules.size(); i++)
+      options.dlog.log("term: " + options.rules[i].term + "\ndefinition: " + options.rules[i].definition + '\n');
+    options.dlog.log('\n');
+
     std::vector<std::string> buffer {};
 
     parse_markdown(lines, buffer, options);

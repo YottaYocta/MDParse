@@ -17,3 +17,12 @@ Executables are available for every platform, but only Linux and Mac have a dedi
 ```
 $ brew tap yottayocta/TMDUtils && brew install MDParse
 ```
+
+## Future Improvements
+  * multi-line parsing for definitions
+  * attributes for various cards 
+    - number of definitions/subpoints
+    - depth of child card 
+  * rule groups for multiple parsing iterations
+  * more options! (i.e output file, file extension)
+  * config files for custom output directories
