@@ -40,6 +40,7 @@ struct parse_options
     definition_delimiter {def}, 
     parent {""},
     depth {static_cast<int>(rules.size())},
+    num_definitions {false},
     dlog {} {}
   parse_options(const std::vector<rule>& r, const std::string& term, const std::string& def, bool d) :
     rules {r}, 
@@ -47,12 +48,14 @@ struct parse_options
     definition_delimiter {def}, 
     parent {""},
     depth {static_cast<int>(rules.size())},
+    num_definitions {false},
     dlog {"parselog.txt", d} {}
   std::vector<rule> rules;
   std::string definition_delimiter;
   std::string term_delimiter;
   std::string parent;
   int depth;
+  bool num_definitions;
   debug dlog;
 };
 
@@ -121,6 +124,8 @@ void parse_markdown(const std::vector<std::string>& lines, std::vector<std::stri
       while (ss >> temp)
         term += " " + temp; 
 
+      int definition_count {};
+
       for (int j {i + 1}; j < lines.size(); j++)
       {
         std::stringstream defstream {lines[j]};
@@ -132,7 +137,10 @@ void parse_markdown(const std::vector<std::string>& lines, std::vector<std::stri
         if (temp == cur_rule.definition)
         {
           if (defstream >> temp)
+          {
             definition += options.definition_delimiter + temp;
+            definition_count++;
+          }
           while (defstream >> temp)
             definition += std::string {" "} + temp; 
         }
@@ -141,7 +149,8 @@ void parse_markdown(const std::vector<std::string>& lines, std::vector<std::stri
 
       if (definition.size() > 0)
       {
-        buffer.push_back(term + definition + options.term_delimiter);
+        std::string card {(options.num_definitions ? term + " (" + std::to_string(definition_count) + ")" + definition + options.term_delimiter : term + definition + options.term_delimiter)};
+        buffer.push_back(card);
       }
       options.dlog.log("\nterm: " + term + "\ndefinition: " + definition + "\n\n");
 
@@ -225,6 +234,16 @@ int main(int argc, char* argv[])
 
   ftxui::ScreenInteractive scr {ftxui::ScreenInteractive::Fullscreen()};
 
+  bool show_number_definitions {};
+
+  ftxui::Component card_options {ftxui::Container::Vertical({
+    ftxui::Checkbox("Display number of definitions", &show_number_definitions)
+  })};
+
+  ftxui::Component card_option_renderer {ftxui::Renderer(card_options, [&](){
+    return ftxui::window(ftxui::text("Card options:"), card_options->Render()) | ftxui::flex;
+  })};
+
   int term_delim_ind {};
   ftxui::Component term_delim_menu {ftxui::Menu(&delimiters, &term_delim_ind)};
 
@@ -287,6 +306,7 @@ int main(int argc, char* argv[])
 
     std::vector<rule> rule_copy {rules.begin(), rules.end()};
     parse_options options {rule_copy, file_delimiter_values[file_delim_ind].term, file_delimiter_values[file_delim_ind].definition, logging};
+    options.num_definitions = show_number_definitions;
 
     options.dlog.log("rules:\n");
     for (int i {0}; i < options.rules.size(); i++)
@@ -306,12 +326,16 @@ int main(int argc, char* argv[])
   ftxui::Component main {ftxui::Container::Vertical({
     rule_gen_renderer,
     rule_list,
-    parse_button
+    parse_button, 
+    card_option_renderer
   })};
 
   ftxui::Component main_renderer {ftxui::Renderer(main, [&](){
     return ftxui::vbox({
-      rule_gen_renderer->Render(),
+      ftxui::hbox({
+        rule_gen_renderer->Render(),
+        card_option_renderer->Render()
+      }),
       
       (rules.size() > 0 ? 
         ftxui::vbox({
